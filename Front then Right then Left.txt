@@ -1,0 +1,155 @@
+# include <Arduino.h>
+
+int motorA1 = 25;
+int motorA2 = 26;
+int enableA = 27;
+
+int motorB1 = 32;
+int motorB2 = 33;
+int enableB = 14;
+
+int encoderAPin1 = 34; // Motor A  C1
+int encoderAPin2 = 35; // Motor A  C2
+int encoderBPin1 = 16; // Motor B  C1
+int encoderBPin2 = 17; // Motor B  C2
+
+int triggerPin = 13;
+int echoPin = 12;
+
+int RIGHT_IR = 15;
+int LEFT_IR = 4;
+
+int rotationCount = 455+ 12;
+
+volatile long encoderACount = 0;
+volatile long encoderBCount = 0;
+int baseSpeed = 110; // Base speed for motors
+
+void IRAM_ATTR encoderAISR() {
+  encoderACount++;
+}
+
+void IRAM_ATTR encoderBISR() {
+  encoderBCount++;
+}
+
+void setup() {
+
+  pinMode(triggerPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  pinMode(RIGHT_IR, INPUT);
+  pinMode(LEFT_IR, INPUT);
+  // Set motor pins as outputs
+  pinMode(motorA1, OUTPUT);
+  pinMode(motorA2, OUTPUT);
+  pinMode(enableA, OUTPUT);
+ 
+  pinMode(motorB1, OUTPUT);
+  pinMode(motorB2, OUTPUT);
+  pinMode(enableB, OUTPUT);
+
+  // Initialize motors to off
+  digitalWrite(enableA, LOW);
+  digitalWrite(enableB, LOW);
+
+  digitalWrite(motorA1, LOW);
+  digitalWrite(motorA2,  HIGH);
+  digitalWrite(motorB1, HIGH);
+  digitalWrite(motorB2, LOW);
+
+  pinMode(encoderAPin1, INPUT);
+  attachInterrupt(digitalPinToInterrupt(encoderAPin1), encoderAISR, RISING);
+  pinMode(encoderAPin2, INPUT);
+  attachInterrupt(digitalPinToInterrupt(encoderAPin2), encoderAISR, RISING);
+ 
+  pinMode(encoderBPin1, INPUT);
+  attachInterrupt(digitalPinToInterrupt(encoderBPin1), encoderBISR, RISING);
+  pinMode(encoderBPin2, INPUT);
+  attachInterrupt(digitalPinToInterrupt(encoderBPin2), encoderBISR, RISING);  
+  delay(1000);
+}
+
+void ForwardMotorA(){
+  digitalWrite(motorA1, LOW);
+  digitalWrite(motorA2,  HIGH);
+}
+void ForwardMotorB(){
+  digitalWrite(motorB1, HIGH);
+  digitalWrite(motorB2, LOW);
+}
+void BackwardMotorA(){
+  digitalWrite(motorA1, HIGH);
+  digitalWrite(motorA2,  LOW);
+}
+void BackwardmotorB(){
+  digitalWrite(motorB1, LOW);
+  digitalWrite(motorB2, HIGH);
+}
+
+
+double measureDistance() {
+  digitalWrite(triggerPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(triggerPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(triggerPin, LOW);
+  long duration = pulseIn(echoPin, HIGH);
+  double distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and return)
+  return distance;
+}
+void moveForward() {
+  encoderACount = 0;
+  encoderBCount = 0;
+ 
+  int startTime = 0;
+  int period = 25;
+  while (measureDistance() > 7.75) {
+    if (millis() - startTime > period) {
+      int newSpeed = constrain(baseSpeed - 0.75*abs(encoderACount - encoderBCount)  , 0 , 255);
+
+      if (encoderACount > encoderBCount) {
+        analogWrite(enableB, baseSpeed);
+        analogWrite(enableA, newSpeed);
+      } else if (encoderACount < encoderBCount) {
+        analogWrite(enableA, baseSpeed);
+        analogWrite(enableB, newSpeed);
+      } else {
+        analogWrite(enableA, baseSpeed);
+        analogWrite(enableB, baseSpeed);
+      }
+      startTime = millis();
+    }
+  }
+  analogWrite(enableA, 0);
+  analogWrite(enableB, 0);
+  encoderACount = 0;
+  encoderBCount = 0;
+}
+
+void loop() {
+    moveForward();    
+   
+    if(digitalRead(RIGHT_IR) == HIGH){ // no wall to the right -> turn right
+      delay(500);
+      analogWrite(enableB, 175);
+      analogWrite(enableA, 0);
+      while(encoderBCount < rotationCount){
+        continue;
+      }
+      analogWrite(enableB, 0);
+      analogWrite(enableA, 0);
+      delay(500);
+    }else if(digitalRead(LEFT_IR) == HIGH){ // no wall to the left-> turn right
+      delay(500);
+      analogWrite(enableB, 0);
+      analogWrite(enableA, 175);
+      while(encoderACount < rotationCount){
+        continue;
+      }
+      analogWrite(enableA, 0);
+      analogWrite(enableB, 0 );
+      delay(500);
+    }
+   
+}
